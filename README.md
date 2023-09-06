@@ -10,7 +10,7 @@ If `gdb-multiarch` isn't available, `arm-none-eabi-gdb-py` should probably work 
 apt install gdb-multiarch
 python3 -m pip install --pre -U git+https://github.com/pyocd/pyOCD.git@develop
 python3 -m pip install arm-gdb
-python3 -m pip pip install freertos-gdb
+python3 -m pip install freertos-gdb
 ```
 
 ## Configure PyOCD
