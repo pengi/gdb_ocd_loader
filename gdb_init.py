@@ -8,8 +8,7 @@ probe_current = None
 class Probe:
     REMOTE_COMMAND='remote'
     
-    def __init__(self, id=None):
-        self.id = id
+    def __init__(self):
         self.process = None
         
     def _do_start(self, port):
@@ -41,12 +40,16 @@ class Probe:
 class probe_openocd(Probe):
     REMOTE_COMMAND='extended-remote'
     
-    def __init__(self, interface, target, id=None, transport='swd', debug_level=1):
-        super().__init__(id=id)
+    def __init__(self, interface, target, cmds=[], transport='swd', debug_level=1):
+        super().__init__()
         self.interface = interface
         self.target = target
         self.transport = transport
         self.debug_level = debug_level
+        if type(cmds) == str:
+            self.cmds = [cmds]
+        else:
+            self.cmds = cmds
         
     def _do_start(self, port):
         script=f"""
@@ -63,19 +66,22 @@ class probe_openocd(Probe):
         command = ['openocd']
         for line in (l.strip() for l in script.splitlines() if l.strip() != ""):
             command += ['-c', line]
+        for line in self.cmds:
+            command += ['-c', line]
 
         return sp.Popen(command, start_new_session=True)
 
     def _do_stop(self):
         try:
-            gdb.execute('mon shutdown')
             gdb.execute("detach")
         except:
             pass
+        self.process.kill()
 
 class probe_pyocd(Probe):
     def __init__(self, target, id=None, pack=None):
-        super().__init__(id=id)
+        super().__init__()
+        self.id = id
         self.target = target
         self.pack = pack
     
@@ -104,8 +110,9 @@ class probe_pyocd(Probe):
 
 
 class probe_stlink(Probe):
-    def __init__(self, target, id=None):
-        super().__init__(id=id)
+    def __init__(self, target, id):
+        super().__init__()
+        self.id = id
         self.target = target
     
     def _do_start(self, port):
@@ -117,8 +124,9 @@ class probe_stlink(Probe):
 
 
 class probe_jlink(Probe):
-    def __init__(self, target, id=None):
-        super().__init__(id=id)
+    def __init__(self, target, id):
+        super().__init__()
+        self.id = id
         self.target = target
     
     def _do_start(self, port):
@@ -151,11 +159,16 @@ def probe_setup(probe, *args, **kwargs):
 
 def probe_start():
     global probe_current
+    if probe_current is None:
+        print("No probe selected")
+        return
     probe_current.start()
-
 
 def probe_stop():
     global probe_current
+    if probe_current is None:
+        print("No probe selected")
+        return
     probe_current.stop()
 
 def reload():
@@ -170,6 +183,8 @@ def reload():
     gdb.execute("monitor reset halt")
 
 def at_exit_handler():
-    probe_stop()
+    global probe_current
+    if probe_current is not None:
+        probe_current.stop()
 
 atexit.register(at_exit_handler)

@@ -1,51 +1,110 @@
-PyOCD is a debbuging tool that can act as a gdb server. This shows how to set it up to automatically start from within gdb
+# GDB OCD loader
+
+Automatically start gdb-server from within GDB
+
+When developing for ARM Cortex-M microcontrollers, it's often needed to restart
+the GDB server. This is a helper to manage the gdb server instances from within
+gdb.
+
+Setup your `.gdbinit` with the probes available, then simply use command
+`connect` to start the gdb server, and connect to it.
+
+Command `reload` will the recompile your application, reload the target and
+restart the gdb server.
+
+## Supported gdb-servers
+
+Multiple gdb-servers are supported:
+
+- `pyOCD`   - generic interface which is RTOS aware. Originally developed for.
+- `openocd` - currently preferred interface. RTOS aware too. Supports most
+              probes.
+- `jlink`   - Not RTOS-aware, but commonly used. If application doesn't use RTOS
+              threads, it may be a good choice.
+- `st-link` - Used for stm32 targets using the st-link. However, also supported
+              by openocd
 
 ## Install
 
-Assume running ubuntu 22.04. Tune the commands to match your setup. Haven't tested on a clean install, so PATH and PYTHONPATH might need tuning.
+Install a version of gdb that supports python. `gdb-multiarch` is recommended,
+but `arm-none-eabi-gdb-py` should work too.
 
-If `gdb-multiarch` isn't available, `arm-none-eabi-gdb-py` should probably work too.
-
+On Ubuntu 22.04:
 ```sh
 apt install gdb-multiarch
-python3 -m pip install --pre -U git+https://github.com/pyocd/pyOCD.git@develop
-python3 -m pip install arm-gdb
-python3 -m pip install freertos-gdb
 ```
 
-## Configure PyOCD
+Then clone this repo in a location of choice, for example in the home directory:
 
-This repository contains files that sets up integration between pyocd and gdb, so that pyocd can be launched from within gdb.
+```sh
+cd ~
+git clone https://github.com/pengi/gdb_ocd_loader.git
+```
 
-Easiest is to clone this repo to somewhere on your file system, copy `gdbinit_template.gdb` to `~/.gdbinit` and update with local configuration.
+Use the `gdbinit_template.gdb` in this repo as template for your `~/.gdbinit` to
+load gdb_ocd_loader.
 
-Or you can use the scripts here as template to set your own system up as you want.
+## Configuration
+
+Follow instructions in `gdbinit_template.gdb`
+
+The probes available are:
+### OpenOCD
+```
+alias my_probe = python probe_setup(probe_openocd, "interface", "target", "command")
+```
+
+`"command"` is optional, and will add commands to the openocd script. Useful for
+selecting a sepcific interface, for example `jlink serial 123456789`.
+
+`"command"` can be an array to specify multiple commands.
+
+### pyOCD
+```
+alias my_probe = python probe_setup(probe_pyocd, "target", "id", "pack file")
+```
+
+### st-link
+```
+alias my_probe = python probe_setup(probe_stlink, "target", "id")
+```
+
+### jlink
+```
+alias my_probe = python probe_setup(probe_pyocd, "target", "id")
+```
+
 
 ## gdb usage
 
-To connect to a probe, run the command specified as alias, followed by `connect`:
+To connect to a probe, run the command specified as alias, in this example
+`nrf`, followed by `connect`:
 ```
-(gdb) probe1
+(gdb) nrf
 (gdb) connect
 ```
 
-pyocd (or the gdb server specified) will start and auto connect.
+openocd (or the gdb server specified) will start and auto connect.
 
-To reconnect, which is useful when running freertos and elf file needs to reload in pyocd too, type `connect` again, and it will reconnect:
+Some gdb-servers (in particular pyocd), needs the elf file when starting, to
+identify RTOS threads. Therefore, restart is recommended when reloading.
+`connect` will automatically disconnect previous connection before reconneting.
+
 ```
 (gdb) load
 (gdb) connect
 ```
 
-Resetting the device, it is usually expected that the device is halted after reset. The command to reset in pyocd is `monitor reset halt`, which is added as an alias above:
+Resetting the device, it is usually expected that the device is halted after
+reset. The command to reset in pyocd is `monitor reset halt`, which is added as
+an alias above:
 
 ```
 (gdb) res
 ```
 
-The commonly used `mon reset` when using for example `JLinkGDBServer` or `st-util` will therefore not behave as expected when using `pyocd`.
-
-When developing, the target `.elf` file is usually in the same directory, and `make myfile.elf` rebuilds it, then there is a shortcut:
+When developing, the target `.elf` file is usually in the same directory, and
+`make myfile.elf` rebuilds it, then there is a shortcut:
 ```
 (gdb) reload
 ```
@@ -54,7 +113,8 @@ This will disconnect the probe, rebuild the software, flash it and reconnect.
 
 ## OS aware debugging
 
-Since running pyocd with loaded elf file, while running FreeRTOS, it is possible to list and inspect threads:
+If using an RTOS aware gdb-server, for example `openocd` or `pyocd`, it is
+possible to list RTOS tasks and inspect RTOS tasks:
 
 ```
 (gdb) info threads
@@ -62,9 +122,6 @@ Since running pyocd with loaded elf file, while running FreeRTOS, it is possible
 (gdb) thread apply all bt
 ...
 ```
-
-To list and switch between different FreeRTOS tasks (gdb calls them threads) and look at the stack at each Task. This needs the elf file to be loaded by pyocd, which is the main reason for the loader mentioned here.
-
 
 ## arm-gdb and freertos-gdb
 
@@ -85,17 +142,3 @@ And
 ```
 
 More information at: https://pypi.org/project/freertos-gdb/
-
-## Add support for more CPUs
-
-PyOCD includes support for multiple microcontrollers. But they are far from all. To support more in pyocd, packs can be downloaded and used. They are available here:
-
-https://developer.arm.com/embedded/cmsis/cmsis-packs
-
-Download the pack, and refer to it from the probe configuration in `.gdbinit`
-
-To add support for the device to read peripherals in `arm-gdb`, an `.svd` file is needed. Many can be found by checking out the develop version of:
-
-https://github.com/ARM-software/CMSIS_5
-
-But `.svd` files are parts of the `.pack`. The `.pack` is simply a renamed ZIP archive, so just unpack the `.svd` files you require from the pack file and refer to it from arm-gdb. Unfortunately arm-gdb doesn't support unpacking the `.pack` file (yet?).
