@@ -41,14 +41,16 @@ class Probe:
 class probe_openocd(Probe):
     REMOTE_COMMAND='extended-remote'
     
-    def __init__(self, interface, target, id=None, transport='swd'):
+    def __init__(self, interface, target, id=None, transport='swd', debug_level=1):
         super().__init__(id=id)
         self.interface = interface
         self.target = target
         self.transport = transport
+        self.debug_level = debug_level
         
     def _do_start(self, port):
         script=f"""
+        debug_level {self.debug_level}
         source [find interface/{self.interface}.cfg]
         transport select {self.transport}
         source [find target/{self.target}.cfg]
@@ -157,7 +159,10 @@ def probe_stop():
     probe_current.stop()
 
 def reload():
-    global probe_config
+    global probe_current
+    if probe_current is None:
+        print("No probe selected")
+        return
     probe_stop()
     gdb.execute("make -j32 " + get_filename())
     probe_start()
