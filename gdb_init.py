@@ -177,7 +177,10 @@ def reload():
         print("No probe selected")
         return
     probe_stop()
-    gdb.execute("make -j32 " + get_filename())
+    status = sp.call(["make", "-j32", get_filename()])
+    if status != 0:
+        print(f"Make failed, skipping reprogramming")
+        return
     probe_start()
     gdb.execute("load")
     gdb.execute("monitor reset halt")
